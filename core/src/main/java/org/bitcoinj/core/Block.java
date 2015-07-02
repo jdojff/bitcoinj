@@ -37,8 +37,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import static org.bitcoinj.core.Coin.FIFTY_COINS;
-import static org.bitcoinj.core.Utils.doubleDigest;
-import static org.bitcoinj.core.Utils.doubleDigestTwoBuffers;
+import static org.bitcoinj.core.Sha256Hash.hashTwice;
 
 /**
  * <p>A block is a group of transactions, and is one of the fundamental data structures of the Bitcoin system.
@@ -192,7 +191,7 @@ public class Block extends Message {
         difficultyTarget = readUint32();
         nonce = readUint32();
 
-        hash = new Sha256Hash(Utils.reverseBytes(Utils.doubleDigest(payload, offset, cursor)));
+        hash = Sha256Hash.wrapReversed(Sha256Hash.hashTwice(payload, offset, cursor));
 
         headerParsed = true;
         headerBytesValid = parseRetain;
@@ -386,8 +385,8 @@ public class Block extends Message {
         // fall back to manual write
         maybeParseHeader();
         Utils.uint32ToByteStreamLE(version, stream);
-        stream.write(Utils.reverseBytes(prevBlockHash.getBytes()));
-        stream.write(Utils.reverseBytes(getMerkleRoot().getBytes()));
+        stream.write(prevBlockHash.getReversedBytes());
+        stream.write(getMerkleRoot().getReversedBytes());
         Utils.uint32ToByteStreamLE(time, stream);
         Utils.uint32ToByteStreamLE(difficultyTarget, stream);
         Utils.uint32ToByteStreamLE(nonce, stream);
@@ -512,7 +511,7 @@ public class Block extends Message {
         try {
             ByteArrayOutputStream bos = new UnsafeByteArrayOutputStream(HEADER_SIZE);
             writeHeader(bos);
-            return new Sha256Hash(Utils.reverseBytes(doubleDigest(bos.toByteArray())));
+            return Sha256Hash.wrapReversed(Sha256Hash.hashTwice(bos.toByteArray()));
         } catch (IOException e) {
             throw new RuntimeException(e); // Cannot happen.
         }
@@ -700,7 +699,7 @@ public class Block extends Message {
 
     private Sha256Hash calculateMerkleRoot() {
         List<byte[]> tree = buildMerkleTree();
-        return new Sha256Hash(tree.get(tree.size() - 1));
+        return Sha256Hash.wrap(tree.get(tree.size() - 1));
     }
 
     private List<byte[]> buildMerkleTree() {
@@ -750,7 +749,7 @@ public class Block extends Message {
                 int right = Math.min(left + 1, levelSize - 1);
                 byte[] leftBytes = Utils.reverseBytes(tree.get(levelOffset + left));
                 byte[] rightBytes = Utils.reverseBytes(tree.get(levelOffset + right));
-                tree.add(Utils.reverseBytes(doubleDigestTwoBuffers(leftBytes, 0, 32, rightBytes, 0, 32)));
+                tree.add(Utils.reverseBytes(hashTwice(leftBytes, 0, 32, rightBytes, 0, 32)));
             }
             // Move to the next level.
             levelOffset += levelSize;
@@ -1027,7 +1026,7 @@ public class Block extends Message {
                 byte[] counter = new byte[32];
                 counter[0] = (byte) txCounter;
                 counter[1] = (byte) (txCounter++ >> 8);
-                input.getOutpoint().setHash(new Sha256Hash(counter));
+                input.getOutpoint().setHash(Sha256Hash.wrap(counter));
             } else {
                 input = new TransactionInput(params, t, Script.createInputScript(EMPTY_BYTES, EMPTY_BYTES), prevOut);
             }

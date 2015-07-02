@@ -2743,8 +2743,8 @@ public class Wallet extends BaseTaggableObject implements Serializable, BlockCha
         try {
             StringBuilder builder = new StringBuilder();
             Coin estimatedBalance = getBalance(BalanceType.ESTIMATED);
-            Coin availableBalance = getBalance(BalanceType.AVAILABLE);
-            builder.append(String.format("Wallet containing %s BTC (available: %s BTC) in:%n",
+            Coin availableBalance = getBalance(BalanceType.AVAILABLE_SPENDABLE);
+            builder.append(String.format("Wallet containing %s BTC (spendable: %s BTC) in:%n",
                     estimatedBalance.toPlainString(), availableBalance.toPlainString()));
             builder.append(String.format("  %d pending transactions%n", pending.size()));
             builder.append(String.format("  %d unspent transactions%n", unspent.size()));
@@ -4462,6 +4462,7 @@ public class Wallet extends BaseTaggableObject implements Serializable, BlockCha
      */
     public void deserializeExtension(WalletExtension extension, byte[] data) throws Exception {
         lock.lock();
+        keychainLock.lock();
         try {
             // This method exists partly to establish a lock ordering of wallet > extension.
             extension.deserializeWalletExtension(this, data);
@@ -4471,6 +4472,7 @@ public class Wallet extends BaseTaggableObject implements Serializable, BlockCha
             extensions.remove(extension.getWalletExtensionID());
             Throwables.propagate(throwable);
         } finally {
+            keychainLock.unlock();
             lock.unlock();
         }
     }

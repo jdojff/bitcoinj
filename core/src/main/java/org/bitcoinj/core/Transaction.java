@@ -226,7 +226,7 @@ public class Transaction extends ChildMessage implements Serializable {
     public Sha256Hash getHash() {
         if (hash == null) {
             byte[] bits = bitcoinSerialize();
-            hash = new Sha256Hash(reverseBytes(doubleDigest(bits)));
+            hash = Sha256Hash.wrapReversed(Sha256Hash.hashTwice(bits));
         }
         return hash;
     }
@@ -983,7 +983,7 @@ public class Transaction extends ChildMessage implements Serializable {
                     this.outputs = outputs;
                     // Satoshis bug is that SignatureHash was supposed to return a hash and on this codepath it
                     // actually returns the constant "1" to indicate an error, which is never checked for. Oops.
-                    return new Sha256Hash("0100000000000000000000000000000000000000000000000000000000000000");
+                    return Sha256Hash.wrap("0100000000000000000000000000000000000000000000000000000000000000");
                 }
                 // In SIGHASH_SINGLE the outputs after the matching input index are deleted, and the outputs before
                 // that position are "nulled out". Unintuitively, the value in a "null" transaction is set to -1.
@@ -1010,7 +1010,7 @@ public class Transaction extends ChildMessage implements Serializable {
             uint32ToByteStreamLE(0x000000ff & sigHashType, bos);
             // Note that this is NOT reversed to ensure it will be signed correctly. If it were to be printed out
             // however then we would expect that it is IS reversed.
-            Sha256Hash hash = new Sha256Hash(doubleDigest(bos.toByteArray()));
+            Sha256Hash hash = Sha256Hash.twiceOf(bos.toByteArray());
             bos.close();
 
             // Put the transaction back to how we found it.
@@ -1104,7 +1104,6 @@ public class Transaction extends ChildMessage implements Serializable {
     public List<TransactionOutput> getWalletOutputs(TransactionBag transactionBag){
         maybeParse();
         List<TransactionOutput> walletOutputs = new LinkedList<TransactionOutput>();
-        Coin v = Coin.ZERO;
         for (TransactionOutput o : outputs) {
             if (!o.isMineOrWatched(transactionBag)) continue;
             walletOutputs.add(o);

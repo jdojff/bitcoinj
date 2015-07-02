@@ -39,6 +39,7 @@ import org.spongycastle.crypto.signers.ECDSASigner;
 import org.spongycastle.crypto.signers.HMacDSAKCalculator;
 import org.spongycastle.math.ec.ECAlgorithms;
 import org.spongycastle.math.ec.ECPoint;
+import org.spongycastle.math.ec.FixedPointCombMultiplier;
 import org.spongycastle.math.ec.FixedPointUtil;
 import org.spongycastle.math.ec.custom.sec.SecP256K1Curve;
 import org.spongycastle.util.encoders.Base64;
@@ -203,7 +204,7 @@ public class ECKey implements EncryptableItem, Serializable {
      * See the ECKey class docs for a discussion of point compression.
      */
     public static ECPoint compressPoint(ECPoint point) {
-        return point.isCompressed() ? point : CURVE.getCurve().decodePoint(point.getEncoded(true));
+        return getPointWithCompression(point, true);
     }
 
     public static LazyECPoint compressPoint(LazyECPoint point) {
@@ -215,11 +216,20 @@ public class ECKey implements EncryptableItem, Serializable {
      * See the ECKey class docs for a discussion of point compression.
      */
     public static ECPoint decompressPoint(ECPoint point) {
-        return !point.isCompressed() ? point : CURVE.getCurve().decodePoint(point.getEncoded(false));
+        return getPointWithCompression(point, false);
     }
 
     public static LazyECPoint decompressPoint(LazyECPoint point) {
         return !point.isCompressed() ? point : new LazyECPoint(decompressPoint(point.get()));
+    }
+
+    private static ECPoint getPointWithCompression(ECPoint point, boolean compressed) {
+      if (point.isCompressed() == compressed)
+          return point;
+      point = point.normalize();
+      BigInteger x = point.getAffineXCoord().toBigInteger();
+      BigInteger y = point.getAffineYCoord().toBigInteger();
+      return CURVE.getCurve().createPoint(x, y, compressed);
     }
 
     /**
@@ -243,8 +253,8 @@ public class ECKey implements EncryptableItem, Serializable {
      * compressed or not.
      */
     public static ECKey fromPrivate(BigInteger privKey, boolean compressed) {
-        ECPoint point = CURVE.getG().multiply(privKey);
-        return new ECKey(privKey, compressed ? compressPoint(point) : decompressPoint(point));
+        ECPoint point = publicPointFromPrivate(privKey);
+        return new ECKey(privKey, getPointWithCompression(point, compressed));
     }
 
     /**
@@ -350,7 +360,7 @@ public class ECKey implements EncryptableItem, Serializable {
     /**
      * Creates an ECKey given either the private key only, the public key only, or both. If only the private key
      * is supplied, the public key will be calculated from it (this is slow). If both are supplied, it's assumed
-     * the public key already correctly matches the public key. If only the public key is supplied, this ECKey cannot
+     * the public key already correctly matches the private key. If only the public key is supplied, this ECKey cannot
      * be used for signing.
      * @param compressed If set to true and pubKey is null, the derived public key will be in compressed form.
      */
@@ -361,9 +371,8 @@ public class ECKey implements EncryptableItem, Serializable {
         this.priv = privKey;
         if (pubKey == null) {
             // Derive public from private.
-            ECPoint point = CURVE.getG().multiply(privKey);
-            if (compressed)
-                point = compressPoint(point);
+            ECPoint point = publicPointFromPrivate(privKey);
+            point = getPointWithCompression(point, compressed);
             this.pub = new LazyECPoint(point);
         } else {
             // We expect the pubkey to be in regular encoded form, just as a BigInteger. Therefore the first byte is
@@ -439,8 +448,23 @@ public class ECKey implements EncryptableItem, Serializable {
      * new BigInteger(1, bytes);</tt>
      */
     public static byte[] publicKeyFromPrivate(BigInteger privKey, boolean compressed) {
-        ECPoint point = CURVE.getG().multiply(privKey);
+        ECPoint point = publicPointFromPrivate(privKey);
         return point.getEncoded(compressed);
+    }
+
+    /**
+     * Returns public key point from the given private key. To convert a byte array into a BigInteger, use <tt>
+     * new BigInteger(1, bytes);</tt>
+     */
+    public static ECPoint publicPointFromPrivate(BigInteger privKey) {
+        /*
+         * TODO: FixedPointCombMultiplier currently doesn't support scalars longer than the group order,
+         * but that could change in future versions.
+         */
+        if (privKey.bitLength() > CURVE.getN().bitLength()) {
+            privKey = privKey.mod(CURVE.getN());
+        }
+        return new FixedPointCombMultiplier().multiply(CURVE.getG(), privKey);
     }
 
     /** Gets the hash160 form of the public key (as seen in addresses). */
@@ -768,22 +792,31 @@ public class ECKey implements EncryptableItem, Serializable {
         try {
             ASN1InputStream decoder = new ASN1InputStream(asn1privkey);
             DLSequence seq = (DLSequence) decoder.readObject();
+            checkArgument(decoder.readObject() == null, "Input contains extra bytes");
+            decoder.close();
+
             checkArgument(seq.size() == 4, "Input does not appear to be an ASN.1 OpenSSL EC private key");
+
             checkArgument(((ASN1Integer) seq.getObjectAt(0)).getValue().equals(BigInteger.ONE),
                     "Input is of wrong version");
-            Object obj = seq.getObjectAt(1);
-            byte[] privbits = ((ASN1OctetString) obj).getOctets();
-            decoder.close();
+
+            byte[] privbits = ((ASN1OctetString) seq.getObjectAt(1)).getOctets();
             BigInteger privkey = new BigInteger(1, privbits);
-            byte[] pubbits = ((DERBitString)((ASN1TaggedObject)seq.getObjectAt(3)).getObject()).getBytes();
+
+            ASN1TaggedObject pubkey = (ASN1TaggedObject) seq.getObjectAt(3);
+            checkArgument(pubkey.getTagNo() == 1, "Input has 'publicKey' with bad tag number");
+            byte[] pubbits = ((DERBitString)pubkey.getObject()).getBytes();
+            checkArgument(pubbits.length == 33 || pubbits.length == 65, "Input has 'publicKey' with invalid length");
+            int encoding = pubbits[0] & 0xFF;
+            // Only allow compressed(2,3) and uncompressed(4), not infinity(0) or hybrid(6,7)
+            checkArgument(encoding >= 2 && encoding <= 4, "Input has 'publicKey' with invalid encoding");
+
             // Now sanity check to ensure the pubkey bytes match the privkey.
-            byte[] compressed = publicKeyFromPrivate(privkey, true);
-            if (Arrays.equals(pubbits, compressed))
-                return new ECKey(privkey, compressed);
-            byte[] uncompressed = publicKeyFromPrivate(privkey, false);
-            if (Arrays.equals(pubbits, uncompressed))
-                return new ECKey(privkey, uncompressed);
-            throw new IllegalArgumentException("Public key in ASN.1 structure does not match private key.");
+            boolean compressed = (pubbits.length == 33);
+            ECKey key = new ECKey(privkey, null, compressed);
+            if (!Arrays.equals(key.getPubKey(), pubbits))
+                throw new IllegalArgumentException("Public key in ASN.1 structure does not match private key.");
+            return key;
         } catch (IOException e) {
             throw new RuntimeException(e);  // Cannot happen, reading from memory stream.
         }
@@ -809,7 +842,7 @@ public class ECKey implements EncryptableItem, Serializable {
      */
     public String signMessage(String message, @Nullable KeyParameter aesKey) throws KeyCrypterException {
         byte[] data = Utils.formatMessageForSigning(message);
-        Sha256Hash hash = Sha256Hash.hashTwice(data);
+        Sha256Hash hash = Sha256Hash.twiceOf(data);
         ECDSASignature sig = sign(hash, aesKey);
         // Now we have to work backwards to figure out the recId needed to recover the signature.
         int recId = -1;
@@ -863,7 +896,7 @@ public class ECKey implements EncryptableItem, Serializable {
         byte[] messageBytes = Utils.formatMessageForSigning(message);
         // Note that the C++ code doesn't actually seem to specify any character encoding. Presumably it's whatever
         // JSON-SPIRIT hands back. Assume UTF-8 for now.
-        Sha256Hash messageHash = Sha256Hash.hashTwice(messageBytes);
+        Sha256Hash messageHash = Sha256Hash.twiceOf(messageBytes);
         boolean compressed = false;
         if (header >= 31) {
             compressed = true;

@@ -29,7 +29,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
-import java.math.BigInteger;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
@@ -665,14 +664,15 @@ public abstract class AbstractBlockChain {
             // Walk in ascending chronological order.
             for (Iterator<StoredBlock> it = newBlocks.descendingIterator(); it.hasNext();) {
                 cursor = it.next();
-                if (expensiveChecks && cursor.getHeader().getTimeSeconds() <= getMedianTimestampOfRecentBlocks(cursor.getPrev(blockStore), blockStore))
+                Block cursorBlock = cursor.getHeader();
+                if (expensiveChecks && cursorBlock.getTimeSeconds() <= getMedianTimestampOfRecentBlocks(cursor.getPrev(blockStore), blockStore))
                     throw new VerificationException("Block's timestamp is too early during reorg");
                 TransactionOutputChanges txOutChanges;
                 if (cursor != newChainHead || block == null)
                     txOutChanges = connectTransactions(cursor);
                 else
                     txOutChanges = connectTransactions(newChainHead.getHeight(), block);
-                storedNewHead = addToBlockStore(storedNewHead, cursor.getHeader(), txOutChanges);
+                storedNewHead = addToBlockStore(storedNewHead, cursorBlock.cloneAsHeader(), txOutChanges);
             }
         } else {
             // (Finally) write block to block store

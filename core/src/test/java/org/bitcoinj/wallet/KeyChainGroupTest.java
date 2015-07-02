@@ -33,7 +33,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.junit.Assert.*;
-import static org.junit.Assert.assertArrayEquals;
 
 public class KeyChainGroupTest {
     // Number of initial keys in this tests HD wallet, including interior keys.
@@ -65,7 +64,7 @@ public class KeyChainGroupTest {
     }
 
     private MarriedKeyChain createMarriedKeyChain() {
-        byte[] entropy = Sha256Hash.hash("don't use a seed like this in real life".getBytes()).getBytes();
+        byte[] entropy = Sha256Hash.hash("don't use a seed like this in real life".getBytes());
         DeterministicSeed seed = new DeterministicSeed(entropy, "", MnemonicCode.BIP39_STANDARDISATION_TIME_SECS);
         MarriedKeyChain chain = MarriedKeyChain.builder()
                 .seed(seed)

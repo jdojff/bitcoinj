@@ -31,10 +31,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
 import java.net.URL;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -50,14 +49,6 @@ import static com.google.common.util.concurrent.Uninterruptibles.sleepUninterrup
  * To enable debug logging from the library, run with -Dbitcoinj.logging=true on your command line.
  */
 public class Utils {
-    private static final MessageDigest digest;
-    static {
-        try {
-            digest = MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);  // Can't happen.
-        }
-    }
 
     /** The string that prefixes all text messages signed using Bitcoin keys. */
     public static final String BITCOIN_SIGNED_MESSAGE_HEADER = "Bitcoin Signed Message:\n";
@@ -138,48 +129,6 @@ public class Utils {
         if (bytes.length < 8) {
             for (int i = 0; i < 8 - bytes.length; i++)
                 stream.write(0);
-        }
-    }
-
-    /**
-     * See {@link Utils#doubleDigest(byte[], int, int)}.
-     */
-    public static byte[] doubleDigest(byte[] input) {
-        return doubleDigest(input, 0, input.length);
-    }
-
-    /**
-     * Calculates the SHA-256 hash of the given byte range, and then hashes the resulting hash again. This is
-     * standard procedure in Bitcoin. The resulting hash is in big endian form.
-     */
-    public static byte[] doubleDigest(byte[] input, int offset, int length) {
-        synchronized (digest) {
-            digest.reset();
-            digest.update(input, offset, length);
-            byte[] first = digest.digest();
-            return digest.digest(first);
-        }
-    }
-
-    public static byte[] singleDigest(byte[] input, int offset, int length) {
-        synchronized (digest) {
-            digest.reset();
-            digest.update(input, offset, length);
-            return digest.digest();
-        }
-    }
-
-    /**
-     * Calculates SHA256(SHA256(byte range 1 + byte range 2)).
-     */
-    public static byte[] doubleDigestTwoBuffers(byte[] input1, int offset1, int length1,
-                                                byte[] input2, int offset2, int length2) {
-        synchronized (digest) {
-            digest.reset();
-            digest.update(input1, offset1, length1);
-            digest.update(input2, offset2, length2);
-            byte[] first = digest.digest();
-            return digest.digest(first);
         }
     }
 
@@ -268,16 +217,12 @@ public class Utils {
      * Calculates RIPEMD160(SHA256(input)). This is used in Address calculations.
      */
     public static byte[] sha256hash160(byte[] input) {
-        try {
-            byte[] sha256 = MessageDigest.getInstance("SHA-256").digest(input);
-            RIPEMD160Digest digest = new RIPEMD160Digest();
-            digest.update(sha256, 0, sha256.length);
-            byte[] out = new byte[20];
-            digest.doFinal(out, 0);
-            return out;
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);  // Cannot happen.
-        }
+        byte[] sha256 = Sha256Hash.hash(input);
+        RIPEMD160Digest digest = new RIPEMD160Digest();
+        digest.update(sha256, 0, sha256.length);
+        byte[] out = new byte[20];
+        digest.doFinal(out, 0);
+        return out;
     }
 
     /**
@@ -427,19 +372,13 @@ public class Utils {
      * Returns the current time, or a mocked out equivalent.
      */
     public static Date now() {
-        if (mockTime != null)
-            return mockTime;
-        else
-            return new Date();
+        return mockTime != null ? mockTime : new Date();
     }
 
     // TODO: Replace usages of this where the result is / 1000 with currentTimeSeconds.
     /** Returns the current time in milliseconds since the epoch, or a mocked out equivalent. */
     public static long currentTimeMillis() {
-        if (mockTime != null)
-            return mockTime.getTime();
-        else
-            return System.currentTimeMillis();
+        return mockTime != null ? mockTime.getTime() : System.currentTimeMillis();
     }
 
     public static long currentTimeSeconds() {
@@ -481,6 +420,44 @@ public class Utils {
         byte[] result = Arrays.copyOf(bytes, bytes.length + 1);
         result[result.length - 1] = b;
         return result;
+    }
+
+    /**
+     * Constructs a new String by decoding the given bytes using the specified charset.
+     * <p>
+     * This is a convenience method which wraps the checked exception with a RuntimeException.
+     * The exception can never occur given the charsets
+     * US-ASCII, ISO-8859-1, UTF-8, UTF-16, UTF-16LE or UTF-16BE.
+     *
+     * @param bytes the bytes to be decoded into characters
+     * @param charsetName the name of a supported {@linkplain java.nio.charset.Charset charset}
+     * @return the decoded String
+     */
+    public static String toString(byte[] bytes, String charsetName) {
+        try {
+            return new String(bytes, charsetName);
+        } catch (UnsupportedEncodingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Encodes the given string into a sequence of bytes using the named charset.
+     * <p>
+     * This is a convenience method which wraps the checked exception with a RuntimeException.
+     * The exception can never occur given the charsets
+     * US-ASCII, ISO-8859-1, UTF-8, UTF-16, UTF-16LE or UTF-16BE.
+     *
+     * @param str the string to encode into bytes
+     * @param charsetName the name of a supported {@linkplain java.nio.charset.Charset charset}
+     * @return the encoded bytes
+     */
+    public static byte[] toBytes(CharSequence str, String charsetName) {
+        try {
+            return str.toString().getBytes(charsetName);
+        } catch (UnsupportedEncodingException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**

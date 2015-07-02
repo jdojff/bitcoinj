@@ -1223,11 +1223,7 @@ public class Script {
                 case OP_SHA256:
                     if (stack.size() < 1)
                         throw new ScriptException("Attempted OP_SHA256 on an empty stack");
-                    try {
-                        stack.add(MessageDigest.getInstance("SHA-256").digest(stack.pollLast()));
-                    } catch (NoSuchAlgorithmException e) {
-                        throw new RuntimeException(e);  // Cannot happen.
-                    }
+                    stack.add(Sha256Hash.hash(stack.pollLast()));
                     break;
                 case OP_HASH160:
                     if (stack.size() < 1)
@@ -1237,7 +1233,7 @@ public class Script {
                 case OP_HASH256:
                     if (stack.size() < 1)
                         throw new ScriptException("Attempted OP_SHA256 on an empty stack");
-                    stack.add(Utils.doubleDigest(stack.pollLast()));
+                    stack.add(Sha256Hash.hashTwice(stack.pollLast()));
                     break;
                 case OP_CODESEPARATOR:
                     lastCodeSepLocation = chunk.getStartLocationInProgram() + 1;
