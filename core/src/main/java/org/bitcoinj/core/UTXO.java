@@ -17,9 +17,11 @@
 package org.bitcoinj.core;
 
 import org.bitcoinj.script.*;
+import com.google.common.base.Objects;
 
 import java.io.*;
 import java.math.*;
+import java.util.Locale;
 
 // TODO: Fix this class: should not talk about addresses, height should be optional/support mempool height etc
 
@@ -28,8 +30,7 @@ import java.math.*;
  * It avoids having to store the entire parentTransaction just to get the hash and index.
  * Useful when working with free standing outputs.
  */
-public class UTXO implements Serializable {
-    private static final long serialVersionUID = -8744924157056340509L;
+public class UTXO {
 
     private Coin value;
     private Script script;
@@ -156,12 +157,12 @@ public class UTXO implements Serializable {
 
     @Override
     public String toString() {
-        return String.format("Stored TxOut of %s (%s:%d)", value.toFriendlyString(), hash.toString(), index);
+        return String.format(Locale.US, "Stored TxOut of %s (%s:%d)", value.toFriendlyString(), hash, index);
     }
 
     @Override
     public int hashCode() {
-        return hash.hashCode() + (int) index;
+        return Objects.hashCode(getIndex(), getHash());
     }
 
     @Override
@@ -169,8 +170,7 @@ public class UTXO implements Serializable {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         UTXO other = (UTXO) o;
-        return getHash().equals(other.getHash()) &&
-                getIndex() == other.getIndex();
+        return getIndex() == other.getIndex() && getHash().equals(other.getHash());
     }
 
     public void serializeToStream(OutputStream bos) throws IOException {
@@ -191,12 +191,6 @@ public class UTXO implements Serializable {
         bos.write(0xFF & (height >> 16));
         bos.write(0xFF & (height >> 24));
 
-        byte[] coinbaseByte = new byte[1];
-        if (coinbase) {
-            coinbaseByte[0] = 1;
-        } else {
-            coinbaseByte[0] = 0;
-        }
-        bos.write(coinbaseByte);
+        bos.write(new byte[] { (byte)(coinbase ? 1 : 0) });
     }
 }

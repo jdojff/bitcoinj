@@ -54,6 +54,8 @@ public class Utils {
     public static final String BITCOIN_SIGNED_MESSAGE_HEADER = "Bitcoin Signed Message:\n";
     public static final byte[] BITCOIN_SIGNED_MESSAGE_HEADER_BYTES = BITCOIN_SIGNED_MESSAGE_HEADER.getBytes(Charsets.UTF_8);
 
+    private static final Joiner SPACE_JOINER = Joiner.on(" ");
+
     private static BlockingQueue<Boolean> mockSleepQueue;
 
     /**
@@ -77,21 +79,21 @@ public class Utils {
     }
 
     public static void uint32ToByteArrayBE(long val, byte[] out, int offset) {
-        out[offset + 0] = (byte) (0xFF & (val >> 24));
+        out[offset] = (byte) (0xFF & (val >> 24));
         out[offset + 1] = (byte) (0xFF & (val >> 16));
         out[offset + 2] = (byte) (0xFF & (val >> 8));
-        out[offset + 3] = (byte) (0xFF & (val >> 0));
+        out[offset + 3] = (byte) (0xFF & val);
     }
 
     public static void uint32ToByteArrayLE(long val, byte[] out, int offset) {
-        out[offset + 0] = (byte) (0xFF & (val >> 0));
+        out[offset] = (byte) (0xFF & val);
         out[offset + 1] = (byte) (0xFF & (val >> 8));
         out[offset + 2] = (byte) (0xFF & (val >> 16));
         out[offset + 3] = (byte) (0xFF & (val >> 24));
     }
 
     public static void uint64ToByteArrayLE(long val, byte[] out, int offset) {
-        out[offset + 0] = (byte) (0xFF & (val >> 0));
+        out[offset] = (byte) (0xFF & val);
         out[offset + 1] = (byte) (0xFF & (val >> 8));
         out[offset + 2] = (byte) (0xFF & (val >> 16));
         out[offset + 3] = (byte) (0xFF & (val >> 24));
@@ -102,14 +104,14 @@ public class Utils {
     }
 
     public static void uint32ToByteStreamLE(long val, OutputStream stream) throws IOException {
-        stream.write((int) (0xFF & (val >> 0)));
+        stream.write((int) (0xFF & val));
         stream.write((int) (0xFF & (val >> 8)));
         stream.write((int) (0xFF & (val >> 16)));
         stream.write((int) (0xFF & (val >> 24)));
     }
     
     public static void int64ToByteStreamLE(long val, OutputStream stream) throws IOException {
-        stream.write((int) (0xFF & (val >> 0)));
+        stream.write((int) (0xFF & val));
         stream.write((int) (0xFF & (val >> 8)));
         stream.write((int) (0xFF & (val >> 16)));
         stream.write((int) (0xFF & (val >> 24)));
@@ -185,14 +187,14 @@ public class Utils {
 }
 
     public static long readUint32(byte[] bytes, int offset) {
-        return ((bytes[offset++] & 0xFFL) << 0) |
+        return (bytes[offset++] & 0xFFL) |
                 ((bytes[offset++] & 0xFFL) << 8) |
                 ((bytes[offset++] & 0xFFL) << 16) |
                 ((bytes[offset] & 0xFFL) << 24);
     }
     
     public static long readInt64(byte[] bytes, int offset) {
-        return ((bytes[offset++] & 0xFFL) << 0) |
+        return (bytes[offset++] & 0xFFL) |
                ((bytes[offset++] & 0xFFL) << 8) |
                ((bytes[offset++] & 0xFFL) << 16) |
                ((bytes[offset++] & 0xFFL) << 24) |
@@ -203,10 +205,10 @@ public class Utils {
     }
 
     public static long readUint32BE(byte[] bytes, int offset) {
-        return ((bytes[offset + 0] & 0xFFL) << 24) |
+        return ((bytes[offset] & 0xFFL) << 24) |
                 ((bytes[offset + 1] & 0xFFL) << 16) |
                 ((bytes[offset + 2] & 0xFFL) << 8) |
-                ((bytes[offset + 3] & 0xFFL) << 0);
+                (bytes[offset + 3] & 0xFFL);
     }
 
     public static int readUint16BE(byte[] bytes, int offset) {
@@ -307,7 +309,7 @@ public class Utils {
         bytes[3] = (byte) size;
         if (size >= 1) bytes[4] = (byte) ((compact >> 16) & 0xFF);
         if (size >= 2) bytes[5] = (byte) ((compact >> 8) & 0xFF);
-        if (size >= 3) bytes[6] = (byte) ((compact >> 0) & 0xFF);
+        if (size >= 3) bytes[6] = (byte) (compact & 0xFF);
         return decodeMPI(bytes, true);
     }
 
@@ -407,6 +409,18 @@ public class Utils {
         return iso8601.format(dateTime);
     }
 
+    /**
+     * Returns a string containing the string representation of the given items,
+     * delimited by a single space character.
+     *
+     * @param items the items to join
+     * @param <T> the item type
+     * @return the joined space-delimited string
+     */
+    public static <T> String join(Iterable<T> items) {
+        return SPACE_JOINER.join(items);
+    }
+
     public static byte[] copyOf(byte[] in, int length) {
         byte[] out = new byte[length];
         System.arraycopy(in, 0, out, 0, Math.min(length, in.length));
@@ -502,7 +516,7 @@ public class Utils {
     }
     
     // 00000001, 00000010, 00000100, 00001000, ...
-    private static final int bitMask[] = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80};
+    private static final int[] bitMask = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80};
     
     /** Checks if the given bit is set in data, using little endian (not the same as Java native big endian) */
     public static boolean checkBitLE(byte[] data, int index) {
@@ -564,6 +578,7 @@ public class Utils {
     private static class Pair implements Comparable<Pair> {
         int item, count;
         public Pair(int item, int count) { this.count = count; this.item = item; }
+        // note that in this implementation compareTo() is not consistent with equals()
         @Override public int compareTo(Pair o) { return -Ints.compare(count, o.count); }
     }
 

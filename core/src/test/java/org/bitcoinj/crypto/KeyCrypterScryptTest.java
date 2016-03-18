@@ -81,7 +81,7 @@ public class KeyCrypterScryptTest {
     public void testKeyCrypterGood2() {
         KeyCrypterScrypt keyCrypter = new KeyCrypterScrypt(scryptParameters);
 
-        System.out.print("EncrypterDecrypterTest: Trying random UUIDs for plainText and passwords :");
+        // Trying random UUIDs for plainText and passwords.
         int numberOfTests = 16;
         for (int i = 0; i < numberOfTests; i++) {
             // Create a UUID as the plaintext and use another for the password.
@@ -94,9 +94,7 @@ public class KeyCrypterScryptTest {
 
             byte[] reconstructedPlainBytes = keyCrypter.decrypt(data,keyCrypter.deriveKey(password));
             assertEquals(Utils.HEX.encode(plainText.getBytes()), Utils.HEX.encode(reconstructedPlainBytes));
-            System.out.print('.');
         }
-        System.out.println(" Done.");
     }
 
     @Test
@@ -104,12 +102,12 @@ public class KeyCrypterScryptTest {
         KeyCrypterScrypt keyCrypter = new KeyCrypterScrypt(scryptParameters);
 
         // create a longer encryption string
-        StringBuilder stringBuffer = new StringBuilder();
+        StringBuilder builder = new StringBuilder();
         for (int i = 0; i < 100; i++) {
-            stringBuffer.append(i).append(" ").append("The quick brown fox");
+            builder.append(i).append(" The quick brown fox");
         }
 
-        EncryptedData data = keyCrypter.encrypt(stringBuffer.toString().getBytes(), keyCrypter.deriveKey(PASSWORD2));
+        EncryptedData data = keyCrypter.encrypt(builder.toString().getBytes(), keyCrypter.deriveKey(PASSWORD2));
         assertNotNull(data);
 
         try {

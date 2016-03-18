@@ -19,9 +19,10 @@ package org.bitcoinj.crypto;
 
 import org.bitcoinj.core.Sha256Hash;
 import org.bitcoinj.core.Utils;
-import com.google.common.base.Joiner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.base.Stopwatch;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
@@ -47,7 +48,7 @@ public class MnemonicCode {
     private ArrayList<String> wordList;
 
     private static final String BIP39_ENGLISH_RESOURCE_NAME = "mnemonic/wordlist/english.txt";
-    private static String BIP39_ENGLISH_SHA256 = "ad90bf3beb7b0eb7e5acd74727dc0da96e0a280a258354e7293fb7e211ac03db";
+    private static final String BIP39_ENGLISH_SHA256 = "ad90bf3beb7b0eb7e5acd74727dc0da96e0a280a258354e7293fb7e211ac03db";
 
     /** UNIX time for when the BIP39 standard was finalised. This can be used as a default seed birthday. */
     public static long BIP39_STANDARDISATION_TIME_SECS = 1381276800;
@@ -126,12 +127,13 @@ public class MnemonicCode {
         // used as a pseudo-random function. Desired length of the
         // derived key is 512 bits (= 64 bytes).
         //
-        String pass = Joiner.on(' ').join(words);
+        String pass = Utils.join(words);
         String salt = "mnemonic" + passphrase;
 
-        long start = System.currentTimeMillis();
+        final Stopwatch watch = Stopwatch.createStarted();
         byte[] seed = PBKDF2SHA512.derive(pass, salt, PBKDF2_ROUNDS, 64);
-        log.info("PBKDF2 took {}ms", System.currentTimeMillis() - start);
+        watch.stop();
+        log.info("PBKDF2 took {}", watch);
         return seed;
     }
 

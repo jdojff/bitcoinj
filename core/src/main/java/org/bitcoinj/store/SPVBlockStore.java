@@ -103,7 +103,7 @@ public class SPVBlockStore implements BlockStore {
             FileChannel channel = randomAccessFile.getChannel();
             fileLock = channel.tryLock();
             if (fileLock == null)
-                throw new BlockStoreException("Store file is already locked by another process");
+                throw new ChainFileLockedException("Store file is already locked by another process");
 
             // Map it into memory read/write. The kernel will take care of flushing writes to disk at the most
             // efficient times, which may mean that until the map is deallocated the data on disk is randomly
@@ -150,7 +150,7 @@ public class SPVBlockStore implements BlockStore {
     }
 
     /** Returns the size in bytes of the file that is used to store the chain with the current parameters. */
-    public int getFileSize() {
+    public final int getFileSize() {
         return RECORD_SIZE * numHeaders + FILE_PROLOGUE_BYTES /* extra kilobyte for stuff */;
     }
 

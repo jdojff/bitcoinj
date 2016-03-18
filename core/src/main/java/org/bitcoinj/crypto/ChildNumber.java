@@ -16,11 +16,13 @@
 
 package org.bitcoinj.crypto;
 
+import java.util.Locale;
+
 import com.google.common.primitives.Ints;
 
 /**
  * <p>This is just a wrapper for the i (child number) as per BIP 32 with a boolean getter for the most significant bit
- * and a getter for the actual 0-based child number. A {@link List} of these forms a <i>path</i> through a
+ * and a getter for the actual 0-based child number. A {@link java.util.List} of these forms a <i>path</i> through a
  * {@link DeterministicHierarchy}. This class is immutable.
  */
 public class ChildNumber implements Comparable<ChildNumber> {
@@ -73,15 +75,14 @@ public class ChildNumber implements Comparable<ChildNumber> {
 
     @Override
     public String toString() {
-        return String.format("%d%s", num(), isHardened() ? "H" : "");
+        return String.format(Locale.US, "%d%s", num(), isHardened() ? "H" : "");
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        ChildNumber other = (ChildNumber) o;
-        return i == other.i;
+        return i == ((ChildNumber)o).i;
     }
 
     @Override
@@ -91,6 +92,7 @@ public class ChildNumber implements Comparable<ChildNumber> {
 
     @Override
     public int compareTo(ChildNumber other) {
+        // note that in this implementation compareTo() is not consistent with equals()
         return Ints.compare(this.num(), other.num());
     }
 }
